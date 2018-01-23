@@ -36,9 +36,7 @@ class EasymarketingProductsModuleFrontController extends ModuleFrontController
                 && ($id_lang = Language::getIdByIso(Tools::getValue('lang'))) == false)) {
             $id_lang = Configuration::get('PS_LANG_DEFAULT');
         }
-
         if (Tools::getValue('shop_token') == Configuration::get('EASYMARKETING_SHOP_TOKEN')) {
-
             if (Tools::getIsset('offset') && Tools::getIsset('limit') &&
                 Validate::isInt(Tools::getValue('offset')) && Validate::isInt(Tools::getValue('limit'))
             ) {

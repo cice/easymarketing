@@ -42,7 +42,6 @@ class EasymarketingNewproductsModuleFrontController extends ModuleFrontControlle
                 Validate::isInt(Tools::getValue('limit')) && Tools::getIsset('newer_than') &&
                 Validate::isInt(Tools::getValue('newer_than'))
             ) {
-
                 $limit = (int)Tools::getValue('limit');
                 $newer_than = (int)Tools::getValue('newer_than');
                 $response = array(

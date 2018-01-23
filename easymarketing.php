@@ -31,13 +31,14 @@ class Easymarketing extends Module
     private static $attr_mappings = array();
     private static $export_categories = array();
     private static $google_category_names = array();
+    private static $_carriers = array();
 
 
     public function __construct()
     {
         $this->name = 'easymarketing';
         $this->tab = 'advertising_marketing';
-        $this->version = '0.4.11';
+        $this->version = '0.4.12';
         $this->author = 'easymarketing';
         $this->module_key = 'cc7d8cbd1dbe4d6a14e33c7a6570289e';
         $this->need_instance = 0;
@@ -929,7 +930,6 @@ class Easymarketing extends Module
         if (is_array($currentCategoryData['children']) &&
             count($currentCategoryData['children']) > 0
         ) {
-
             foreach ($currentCategoryData['children'] as $child) {
                 self::recurseCategoryForInclude(
                     $indexedCategories,
@@ -1147,7 +1147,6 @@ class Easymarketing extends Module
                 ),
             ),
         );
-
     }
 
     public function postProcess()
@@ -1298,7 +1297,6 @@ class Easymarketing extends Module
             if (count($this->_errors) <= 0) {
                 return $this->displayConfirmation($this->l('Settings updated'));
             }
-
         }
     }
 
@@ -1582,7 +1580,6 @@ class Easymarketing extends Module
             } else {
                 $shipping_cost += $carrier->getDeliveryPriceByPrice($order_total, $id_zone, (int)$cart->id_currency);
             }
-
         }
 
         // Adding handling charges
@@ -1989,7 +1986,7 @@ class Easymarketing extends Module
         }
 
         if (!Validate::isOrderBy($order_by) || !Validate::isOrderWay($order_way)) {
-            die (Tools::displayError());
+            die(Tools::displayError());
         }
         if ($order_by == 'id_product' || $order_by == 'price' || $order_by == 'date_add' || $order_by == 'date_upd') {
             $order_by_prefix = 'p';
@@ -2160,10 +2157,9 @@ class Easymarketing extends Module
                 (int)$id_lang.Shop::addSqlRestrictionOnLang('cl', 'product_shop.id_shop')
             );
 
-            $sql->leftJoin('specific_price', 'sp', 'sp.`id_product` = p.`id_product`'); // AND 'sp.`id_shop` = cp.`id_shop`
-
+            $sql->leftJoin('specific_price', 'sp', 'sp.`id_product` = p.`id_product`');
+            // AND 'sp.`id_shop` = cp.`id_shop`
             // @todo test if everything is ok, then refactorise call of this method
-
 
             if ($id_categories) {
                 $sql->leftJoin('category_product', 'c', 'c.`id_product` = p.`id_product`');
@@ -2203,13 +2199,15 @@ class Easymarketing extends Module
             $sql->groupBy('unique_id');
 
             // Build ORDER BY
-            //$sql->orderBy((isset($order_by_prefix) ? pSQL($order_by_prefix).'.' : '').'`'.pSQL($order_by).'` '.pSQL($order_way));
+            //$sql->orderBy((isset($order_by_prefix) ? pSQL($order_by_prefix).'.' : '')
+            //.'`'.pSQL($order_by).'` '.pSQL($order_way));
 
             //if ($limit) {
             //$sql->limit((int)$limit, (int)$start);
             //}
             //				pai.`id_image` as pai_id_image, il.`legend` as pai_legend,
-            $sql->select('pa.`id_product_attribute`, product_attribute_shop.`price` AS price_attribute, product_attribute_shop.`ecotax` AS ecotax_attr,
+            $sql->select('pa.`id_product_attribute`, product_attribute_shop.`price` AS price_attribute,
+                product_attribute_shop.`ecotax` AS ecotax_attr,
 				IF (IFNULL(pa.`reference`, \'\') = \'\', p.`reference`, pa.`reference`) AS reference,
 				(p.`weight`+ pa.`weight`) weight_attribute,
 				IF (IFNULL(pa.`ean13`, \'\') = \'\', p.`ean13`, pa.`ean13`) AS ean13,
@@ -2492,7 +2490,10 @@ class Easymarketing extends Module
         }
 
         $description_field_name = 'description';
-        if (in_array(Configuration::get('EASYMARKETING_PROD_DESCR'), array_keys($this->getProductDescriptionFieldNames()))) {
+        if (in_array(
+            Configuration::get('EASYMARKETING_PROD_DESCR'),
+            array_keys($this->getProductDescriptionFieldNames())
+        )) {
             $description_field_name = Configuration::get('EASYMARKETING_PROD_DESCR');
         }
 
@@ -2744,7 +2745,6 @@ class Easymarketing extends Module
         $default_meta_order = Meta::getMetaByPage('order-opc', $this->context->language->id);
         if ($this->context->controller instanceof OrderOpcController) {
             if (Configuration::get('EASYMARKETING_LEAD_TRACKER_ENABLED')) {
-
                 $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_LEAD_TRACKER')));
                 if (isset($lead_tracker->code)) {
                     $return .= '<!-- google_lead_tracker -->';
@@ -2770,7 +2770,6 @@ class Easymarketing extends Module
         $default_meta_order = Meta::getMetaByPage('contact', $this->context->language->id);
         if ($this->context->controller instanceof ContactController && Tools::isSubmit('submitMessage')) {
             if (Configuration::get('EASYMARKETING_LEAD_TRACKER_ENABLED')) {
-
                 $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_LEAD_TRACKER')));
                 if (isset($lead_tracker->code)) {
                     $return .= '<!-- google_lead_tracker -->';
@@ -2791,7 +2790,6 @@ class Easymarketing extends Module
                     $return .= $lead_tracker->fb_code;
                 }
             }
-
         }
 
         if (Configuration::get('EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED')) {
