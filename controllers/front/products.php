@@ -1,6 +1,6 @@
 <?php
 /**
- * 2014 Easymarketing AG
+ * 2018 Easymarketing AG
  *
  * NOTICE OF LICENSE
  *
@@ -17,26 +17,33 @@
  * @license   http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
 
-class EasymarketingProductsModuleFrontController extends ModuleFrontController
+class EmarketingProductsModuleFrontController extends ModuleFrontController
 {
     public $display_header = false;
     public $display_footer = false;
 
     public function initContent()
     {
-        parent::initContent();
+        //parent::initContent();
 
         $log_type = 'products';
         $response = null;
-        $message = '===== '.date('Y.m.d h:i:s').' ====='."\r\n";
-        $message .= 'Request: '.print_r($_GET, true);
+        $headers = array();
+
+        $message = "\r\n\r\n".'===== '.date('Y.m.d h:i:s').' ====='."\r\n";
+        $message .= "\r\n".'Request: '.print_r($_GET, true);
+        $message .= "\r\n".'Request: '.print_r($_POST, true);
+
+
 
         if (!Tools::getIsset('lang')
             || (Tools::getIsset('lang')
                 && ($id_lang = Language::getIdByIso(Tools::getValue('lang'))) == false)) {
             $id_lang = Configuration::get('PS_LANG_DEFAULT');
         }
-        if (Tools::getValue('shop_token') == Configuration::get('EASYMARKETING_SHOP_TOKEN')) {
+
+        if (isset($_SERVER['HTTP_AUTHORIZATION']) && $_SERVER['HTTP_AUTHORIZATION'] != '' && $_SERVER['HTTP_AUTHORIZATION'] == Configuration::get(Emarketing::$conf_prefix.'SHOP_TOKEN')) {
+
             if (Tools::getIsset('offset') && Tools::getIsset('limit') &&
                 Validate::isInt(Tools::getValue('offset')) && Validate::isInt(Tools::getValue('limit'))
             ) {
@@ -58,7 +65,6 @@ class EasymarketingProductsModuleFrontController extends ModuleFrontController
 
                 if (count($products) > 0) {
                     $response = array(
-                        'offset' => $offset,
                         'products' => array(),
                     );
 
@@ -71,15 +77,31 @@ class EasymarketingProductsModuleFrontController extends ModuleFrontController
                         );
                     }
                 }
+            } else {
+                $headers[] = $_SERVER['SERVER_PROTOCOL'].' 400 Bad Request';
+            }
+        } else {
+            $headers[] = $_SERVER['SERVER_PROTOCOL'].' 401 Unauthorized';
+        }
+
+        header('Content-Type: application/json');
+
+        if (is_array($headers)) {
+            foreach ($headers as $param_value) {
+                header($param_value);
             }
         }
 
-        $message .= 'Response: '.print_r($response, true);
-        Easymarketing::logToFile($message, $log_type);
+        $message .= "\r\n".'Response: '.print_r($response, true);
+        Emarketing::logToFile($message, $log_type);
         if ($response != null) {
-            die(Tools::jsonEncode($response));
-        } else {
-            die();
+            echo Tools::jsonEncode($response);
         }
+        ob_end_flush();
+    }
+
+    public function display()
+    {
+        return true;
     }
 }

@@ -1,5 +1,5 @@
 {**
-* 2014 Easymarketing AG
+* 2018 Easymarketing AG
 *
 * NOTICE OF LICENSE
 *
@@ -12,12 +12,12 @@
 * to info@easymarketing.de so we can send you a copy immediately.
 *
 * @author    silbersaiten www.silbersaiten.de <info@silbersaiten.de>
-* @copyright 2014 Easymarketing AG
+* @copyright 2018 Easymarketing AG
 * @license   http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
 *}
 {if $display_button}
     <button class="btn btn-default" type="submit" name="submitDoSiteVerification">
-	<i class="icon-download"></i> {l s='Perform Google Site verification' mod='easymarketing'}
+	<i class="icon-download"></i> {l s='Perform Google Site verification' mod='emarketing'}
     </button>
 {/if}
 

@@ -1,6 +1,6 @@
 <?php
 /**
- * 2014 Easymarketing AG
+ * 2018 Easymarketing AG
  *
  * NOTICE OF LICENSE
  *

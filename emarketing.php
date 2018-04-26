@@ -1,6 +1,6 @@
 <?php
 /**
- * 2014 Easymarketing AG
+ * 2018 Easymarketing AG
  *
  * NOTICE OF LICENSE
  *
@@ -13,7 +13,7 @@
  * to info@easymarketing.de so we can send you a copy immediately.
  *
  * @author    silbersaiten www.silbersaiten.de <info@silbersaiten.de>
- * @copyright 2014 Easymarketing AG
+ * @copyright 2018
  * @license   http://opensource.org/licenses/osl-3.0.php Open Software License (OSL 3.0)
  */
 
@@ -21,26 +21,26 @@ if (!defined('_PS_VERSION_')) {
     exit;
 }
 
-class Easymarketing extends Module
+class Emarketing extends Module
 {
-    private static $api_url = 'https://api.easymarketing.de';
-    private static $easymarketing_api_version = '1';
+    private static $api_url = 'https://app.emarketing.com/partner_api';
     private static $fields_for_attributes_mapping = array(
-        'gender', 'age_group', 'color', 'size', 'size_type', 'size_system', 'free_1', 'free_2', 'free_3',
+        'gender', 'age_group', 'color', 'size', 'size_type', 'size_system', 'energy_efficiency_class'
     );
     private static $attr_mappings = array();
     private static $export_categories = array();
-    private static $google_category_names = array();
     private static $_carriers = array();
+    public static $conf_prefix = 'EMARKETING_';
+    private static $psr_access_token_conf_key = 'EMARKETING_KEY';
 
 
     public function __construct()
     {
-        $this->name = 'easymarketing';
+        $this->name = 'emarketing';
         $this->tab = 'advertising_marketing';
-        $this->version = '0.4.12';
-        $this->author = 'easymarketing';
-        $this->module_key = 'cc7d8cbd1dbe4d6a14e33c7a6570289e';
+        $this->version = '1.0.0';
+        $this->author = 'emarketing';
+        $this->module_key = '';
         $this->need_instance = 0;
         $this->ps_versions_compliancy = array(
             'min' => '1.6.0.0',
@@ -50,15 +50,13 @@ class Easymarketing extends Module
 
         parent::__construct();
 
-        $this->displayName = $this->l('Easymarketing – Sales Turbo with Immediate Effect');
-        $this->description = $this->l('Easymarketing automatizes your advertising campaigns on Google, Google Shopping and Facebook and makes intelligent retargeting possible for you.');
+        $this->displayName = $this->l('Emarketing (PS&PSR) – Sales Turbo with Immediate Effect');
+        $this->description = $this->l('Emarketing automatizes your advertising campaigns on Google, Google Shopping and makes intelligent retargeting possible for you.');
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
     }
 
     public function install()
     {
-        /*if (Shop::isFeatureActive())
-            Shop::setContext(Shop::CONTEXT_ALL);*/
         if (!function_exists('curl_init')) {
             $this->_errors[] = $this->l('You need to enable cURL extension in PHP.');
             return false;
@@ -67,19 +65,14 @@ class Easymarketing extends Module
         $return = true;
         $return &= parent::install();
 
-        // automatic generation shop token
-        if (!Configuration::hasKey('EASYMARKETING_SHOP_TOKEN')) {
-            $return &= $this->generateShopToken();
-        }
-
-        $selected_cats = Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_CATEGORIES'));
+        $selected_cats = Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_CATEGORIES'));
         if (!is_array($selected_cats)) {
-            Configuration::updateValue('EASYMARKETING_EXPORT_CATEGORIES', Tools::jsonEncode(array()));
+            Configuration::updateValue(self::$conf_prefix.'EXPORT_CATEGORIES', Tools::jsonEncode(array()));
         }
 
-        Configuration::updateValue('EASYMARKETING_LOG_ENABLED', 0);
+        Configuration::updateValue(self::$conf_prefix.'LOG_ENABLED', 0);
 
-        $return &= $this->registerHook('footer');
+        $return &= $this->registerHook('header');
         $return &= $this->registerHook('orderConfirmation');
         return (bool)$return;
     }
@@ -101,7 +94,7 @@ class Easymarketing extends Module
 
     public function getExportRootCategory()
     {
-        $selected_cats = Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_CATEGORIES'));
+        $selected_cats = Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_CATEGORIES'));
         if (!is_array($selected_cats) || (count($selected_cats) == 0)) {
             return 1;
         } else {
@@ -130,7 +123,7 @@ class Easymarketing extends Module
 
     public function getExportCategoriesIds()
     {
-        $selected_cats = Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_CATEGORIES'));
+        $selected_cats = Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_CATEGORIES'));
         if (!is_array($selected_cats) || (count($selected_cats) == 0)) {
             return array();
         }
@@ -143,22 +136,7 @@ class Easymarketing extends Module
         return $ids;
     }
 
-    public function getGoogleCategoryNames()
-    {
-        $selected_cats = Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_CATEGORIES'));
-        if (!is_array($selected_cats) || (count($selected_cats) == 0)) {
-            return array();
-        }
-
-        $names = array();
-        foreach ($selected_cats as $cat) {
-            if (trim($cat->name) != '') {
-                $names[$cat->id_category] = $cat->name;
-            }
-        }
-        return $names;
-    }
-
+    /*
     public function doGoogleSiteVerification()
     {
         $status = array();
@@ -201,15 +179,16 @@ class Easymarketing extends Module
                 }
             }
         }
-        Configuration::updateValue('EASYMARKETING_SITE_VERIFICATION_COMPLETED', $completed);
-        Configuration::updateValue('EASYMARKETING_SITE_VERIFICATION_STATUS', Tools::jsonEncode($status));
+        Configuration::updateValue(self::$conf_prefix.'SITE_VERIFICATION_COMPLETED', $completed);
+        Configuration::updateValue(self::$conf_prefix.'SITE_VERIFICATION_STATUS', Tools::jsonEncode($status));
 
         return $completed;
     }
+    */
 
     public static function logToFile($msg, $key = '')
     {
-        if (Configuration::get('EASYMARKETING_LOG_ENABLED')) {
+        if (Configuration::get(self::$conf_prefix.'LOG_ENABLED')) {
             $filename = dirname(__FILE__).'/logs/log_'.$key.'.txt';
             $fd = fopen($filename, 'a');
             fwrite($fd, $msg."\n");
@@ -221,8 +200,6 @@ class Easymarketing extends Module
     {
         $params = array(
             'website_url' => $this->getWebsiteUrl(),
-            'access_token' => Configuration::get('EASYMARKETING_ACCESS_TOKEN'),
-            'shop_token' => Configuration::get('EASYMARKETING_SHOP_TOKEN'),
             'categories_api_endpoint' => Context::getContext()->link->getModuleLink(
                 $this->name,
                 'categories',
@@ -267,153 +244,7 @@ class Easymarketing extends Module
         return Configuration::get('PS_SHOP_DOMAIN');
     }
 
-    public function generateShopToken()
-    {
-        return Configuration::updateValue('EASYMARKETING_SHOP_TOKEN', Tools::passwdGen(16, 'ALPHANUMERIC'));
-    }
-
     /*
-     *  Conversion Tracker Code
-     *  1.integrated on the vendor's checkout success page
-     *  2.replace the conversion value with the value of the shopping basket 2 times: In the javascript as well
-     * as in the img-tag
-     *  3.two trackers provided, code is for Google and fb_code is for Facebook, as far as a Facebook
-     * tracker is available.
-     *  4.Remark: The tracker may also not be available at the time when the module is configured if it
-     * has not been set-up yet in the easymarketing backend. The module should be able to handle this.
-     */
-
-    public function downloadConversionTracker()
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-        );
-
-        $res = self::_curlGET('/conversion_tracker', $get);
-
-        if (($tracker = $this->parseResponse($res, true, false)) != false) {
-            if (Configuration::updateValue('EASYMARKETING_CONVERSION_TRACKER', urlencode($tracker))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /*
-     *  Lead tracker
-     * 1. integrated on two pages, the contact pages as well as the checkout page (after shopping-basket)
-     * 2. There are two trackers provided, code is for Google and fb_code is for Facebook, as far as a Facebook tracker
-     * is available.
-     * 3.Remark: The tracker may also not be available at the time when the module is configured if it has not been
-     * set-up yet in the easymarketing backend. The module should be able to handle this.
-     */
-
-    public function downloadLeadTracker()
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-        );
-
-        $res = self::_curlGET('/lead_tracker', $get);
-
-        if (($tracker = $this->parseResponse($res, true, false)) != false) {
-            if (Configuration::updateValue('EASYMARKETING_LEAD_TRACKER', urlencode($tracker))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /*
-     * Remarketing Code
-     * 1.integrated on each page of the site.
-     * 2.Remark: The tracker may also not be available at the time when the module is configured if it has not been
-     * set-up yet in the easymarketing backend. The module should be able to handle this.
-     * 3. we have to add also
-     * <script type="text/javascript">
-        var google_tag_params = {
-        ecomm_prodid: 'REPLACE_WITH_VALUE',
-        ecomm_pagetype: 'REPLACE_WITH_VALUE',
-        ecomm_totalvalue: 'REPLACE_WITH_VALUE'
-        };
-        </script>
-
-     * READ: https://support.google.com/adwords/answer/3103357
-     * ecomm_prodid 	1234
-     *
-     * Product Id - Must match the Product or Item Group ID from the Google Merchant Center
-     * feed. This allows the dynamic ad to show people the exact product they viewed.
-     *
-     * ecomm_pagetype 	home, searchresults, category, product, cart, purchase,other
-     *
-     * Page Type - Indicates which page people visited. You need to use one of the values listed in the middle column.
-     * Don't change these values and keep them in English, even if your site is in a different language. A value must
-     * be present on each page. These values might be used for the lists that AdWords created for you and for automated
-     * bid optimization. "Product" refers to viewing a product page, and "other" should be used for pages not covered
-     * by the other values. Important: every page needs to have a page type value.
-     *
-     * ecomm_totalvalue 	49.99 	Total Value - Specify the value of the product. On a cart or purchase page, you
-     * need to specify the total value (summing up the value of all products). This value might be used in automated
-     * bidding optimization and may be used to categorize your lists into groups according to the value of products.
-     *
-     * 4. For better performance add customized values
-     * READ: https://support.google.com/adwords/answer/3103357?hl=en-AU#customize_tag
-     */
-
-    public function downloadGoogleRemarketingCode()
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-        );
-
-        $res = self::_curlGET('/google_remarketing_code', $get);
-
-        if (($tracker = $this->parseResponse($res, true, false)) != false) {
-            if (Configuration::updateValue('EASYMARKETING_GOOGLE_REMARKETING_CODE', urlencode($tracker))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /*
-     * Facebook badge
-     *
-     * 1.a like button code that should be integrated on the vendor's checkout success page. Triggering it will like
-     * the vendor's facebook page. The vendor provides the details to his facebook fanpage in the easymarketing system.
-     */
-
-    public function downloadFacebookBadge()
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-        );
-
-        $res = self::_curlGET('/facebook_badge', $get);
-
-        if (($tracker = $this->parseResponse($res, true, false)) != false) {
-            if (Configuration::updateValue('EASYMARKETING_FACEBOOK_BADGE_CODE', urlencode($tracker))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public function downloadExtractionStatus()
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-        );
-
-        $res = self::_curlGET('/extraction_status', $get);
-
-        if (($status = $this->parseResponse($res, true, true)) != false) {
-            return $status;
-        }
-
-        return false;
-    }
-
     public function downloadGoogleSiteVerificationData()
     {
         $get = array(
@@ -428,107 +259,9 @@ class Easymarketing extends Module
 
         return false;
     }
+    */
 
-    public function downloadRetargetingId()
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-        );
-
-        $res = self::_curlGET('/retargeting_id', $get);
-
-        if (($data = $this->parseResponse($res, true, true)) != false) {
-            return $data;
-        }
-
-        return false;
-    }
-
-    /**
-     * @param string $partner_id
-     * @param string $version (mini, medium, medium_two, large)
-     * @return bool
-     */
-    public function downloadDemoChart($partner_id = '', $version = 'mini')
-    {
-        $this->context->smarty->assign(array(
-            'site_url' => $this->getWebsiteUrl(),
-            'partner_id' => $partner_id,
-            'version' => $version
-        ));
-
-        switch ($version) {
-            case 'medium':
-                $w = 300;
-                $h = 167;
-                break;
-            case 'medium_two':
-                $w = 325;
-                $h = 175;
-                break;
-            case 'large':
-                $w = 300;
-                $h = 250;
-                break;
-            default:
-                $w = 357;
-                $h = 167;
-        }
-
-        $this->context->smarty->assign(array(
-            'width' => $w,
-            'height' => $h
-        ));
-
-        return $this->display(__FILE__, 'demo_chart.tpl');
-    }
-
-    /**
-     * @param string $partner_id
-     * @param string $height
-     * @param string $width
-     * @param string $small
-     * @return bool
-     */
-    public function downloadAnalysis($partner_id = '', $height = '400', $width = '400', $small = '')
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-            'partner_id' => $partner_id,
-            'height' => $height,
-            'width' => $width,
-            'small' => $small
-        );
-
-        $res = self::_curlGET('/analysis', $get);
-
-        if (($data = $this->parseResponse($res, true, false)) != false) {
-            return $data;
-        }
-
-        return false;
-    }
-
-    public function downloadPerformance($compact = '', $height = '1300', $width = '1040')
-    {
-        $get = array(
-            'website_url' => $this->getWebsiteUrl(),
-            'height' => $height,
-            'width' => $width
-        );
-        if ($compact != '') {
-            $get['compact'] = 'true';
-        }
-
-        $res = self::_curlGET('/users/performance', $get);
-
-        if (($data = $this->parseResponse($res, true, false)) != false) {
-            return $data;
-        }
-
-        return false;
-    }
-
+    /*
     public function putGoogleSiteVerificationDataInFile($data)
     {
         if (($data->html_file_name != '')
@@ -545,11 +278,9 @@ class Easymarketing extends Module
         }
         return false;
     }
+    */
 
     /*
-     *  if it returns true, then
-     */
-
     public function uploadPerformSiteVerification()
     {
         $params = array(
@@ -565,23 +296,7 @@ class Easymarketing extends Module
 
         return false;
     }
-
-    public function uploadPushProductForSpecialPromotion($product_id)
-    {
-        $params = array(
-            'website_url' => $this->getWebsiteUrl(),
-            'product_id' => $product_id,
-        );
-
-        $res = self::_curlPost('/facebook_status', $params);
-
-        if ($this->parseResponse($res, false, false) == true) {
-            return true;
-        }
-
-        return false;
-    }
-
+    */
 
     public function parseResponse($res, $return_res = false, $json_decode = false)
     {
@@ -614,11 +329,66 @@ class Easymarketing extends Module
     }
 
 
+    private static function _curlPut($url, array $post = null, array $options = array(), $json = false)
+    {
+        $defaults = array(
+            CURLOPT_HEADER => 0,
+            CURLOPT_URL => self::$api_url.$url.'?access_token='.Configuration::get(self::$conf_prefix.'ACCESS_TOKEN'),
+            CURLOPT_FRESH_CONNECT => 1,
+            CURLOPT_FOLLOWLOCATION => 1,
+            CURLOPT_SSL_VERIFYPEER => 0,
+            CURLOPT_RETURNTRANSFER => 1,
+            CURLOPT_FORBID_REUSE => 1,
+            CURLOPT_TIMEOUT => 10,
+        );
+
+        if ($json == true) {
+            $encoded_data = Tools::jsonEncode($post);
+
+            $defaults[CURLOPT_POST] = 1;
+            $defaults[CURLOPT_CUSTOMREQUEST] = 'PUT';
+            $defaults[CURLOPT_POSTFIELDS] = $encoded_data;
+            $defaults[CURLOPT_HTTPHEADER] = array(
+                'Accept: application/vnd.easymarketing.com; version='.self::$easymarketing_api_version,
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Content-Length: '.Tools::strlen($encoded_data)
+            );
+        } else {
+            $defaults[CURLOPT_POST] = 1;
+            $defaults[CURLOPT_HTTPHEADER] = array(
+                'Accept: application/vnd.easymarketing.com; version='.self::$easymarketing_api_version,
+                /*'Content-Type: application/json',
+                'Accept: application/json'*/
+            );
+            $defaults[CURLOPT_POSTFIELDS] = http_build_query($post);
+        }
+
+        $http_status = '400';
+        $result = '';
+        if (function_exists('curl_init')) {
+            $ch = curl_init();
+            curl_setopt_array($ch, ($options + $defaults));
+            if (!$result = curl_exec($ch)) {
+                echo curl_error($ch);
+            }
+
+            $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $message = '===== '.date('Y.m.d h:i:s').' ====='."\r\n";
+            $message .= 'Request: '.print_r($defaults, true);
+            $message .= 'Response '.print_r(array('status' => $http_status, 'result' => $result), true);
+            self::logToFile($message, str_replace('/', '', $url));
+        }
+        return array('status' => $http_status, 'result' => $result);
+    }
+
     private static function _curlPost($url, array $post = null, array $options = array(), $json = false)
     {
         $defaults = array(
             CURLOPT_HEADER => 0,
-            CURLOPT_URL => self::$api_url.$url.'?access_token='.Configuration::get('EASYMARKETING_ACCESS_TOKEN'),
+            CURLOPT_URL => self::$api_url.$url.'?access_token='.Configuration::get(self::$conf_prefix.'ACCESS_TOKEN'),
             CURLOPT_FRESH_CONNECT => 1,
             CURLOPT_FOLLOWLOCATION => 1,
             CURLOPT_SSL_VERIFYPEER => 0,
@@ -669,10 +439,9 @@ class Easymarketing extends Module
         return array('status' => $http_status, 'result' => $result);
     }
 
-
     private static function _curlGet($url, array $get = null, array $options = array())
     {
-        $get['access_token'] = Configuration::get('EASYMARKETING_ACCESS_TOKEN');
+        $get['access_token'] = Configuration::get(self::$conf_prefix.'ACCESS_TOKEN');
 
         $defaults = array(
             CURLOPT_URL => self::$api_url.$url.(strpos($url, '?') === false ? '?' : '').http_build_query($get),
@@ -714,29 +483,44 @@ class Easymarketing extends Module
     public function getContent()
     {
         $html = '';
-        $html .= $this->displayInfo();
+        //$html .= $this->displayInfo();
         $html .= $this->postProcess();
         $this->context->controller->errors = array_merge($this->context->controller->errors, $this->_errors);
         $html .= $this->displayForm();
+
+        $html .= '<pre>'.
+            print_r(array(
+                //'website_url' => $this->getWebsiteUrl(),
+                //'access_token' => Configuration::get(self::$conf_prefix.'ACCESS_TOKEN'),
+                'shop_token' => Configuration::get(self::$conf_prefix.'SHOP_TOKEN'),
+                'categories_api_endpoint' => Context::getContext()->link->getModuleLink(
+                    $this->name,
+                    'categories',
+                    array('shop_token' => Configuration::get(self::$conf_prefix.'SHOP_TOKEN'))
+                ),
+                'products_api_endpoint' => Context::getContext()->link->getModuleLink(
+                    $this->name,
+                    'products',
+                    array('shop_token' => Configuration::get(self::$conf_prefix.'SHOP_TOKEN'))
+                ),
+                'conversion_tracker_api_endpoint' => Context::getContext()->link->getModuleLink(
+                    $this->name,
+                    'conversion',
+                    array('shop_token' => Configuration::get(self::$conf_prefix.'SHOP_TOKEN'))
+                ),
+                'lead_tracker_api_endpoint' => Context::getContext()->link->getModuleLink(
+                    $this->name,
+                    'lead',
+                    array('shop_token' => Configuration::get(self::$conf_prefix.'SHOP_TOKEN'))
+                ),
+                'shop_category_root_id' => $this->getExportRootCategory(),
+            ), true).'</pre>';
         return $html;
-    }
-
-    public function displayInfo()
-    {
-        $this->smarty->assign(array(
-            '_path' => $this->_path,
-            'displayName' => $this->displayName,
-            'author' => $this->author,
-            'description' => $this->description,
-            'demochart' => $this->downloadDemoChart()
-        ));
-
-        return $this->display(__FILE__, 'views/templates/admin/info.tpl');
     }
 
     public function displayForm()
     {
-        $this->context->controller->addJS($this->_path.'views/js/easymarketing.js');
+        $this->context->controller->addJS($this->_path.'views/js/emarketing.js');
 
         $html = '';
         $html .= $this->displayFormSettings();
@@ -764,29 +548,20 @@ class Easymarketing extends Module
         $helper->toolbar_scroll = false;
         $helper->bootstrap = false;
 
-        $helper->fields_value['EASYMARKETING_ACCESS_TOKEN'] =
-            Configuration::get('EASYMARKETING_ACCESS_TOKEN');
-        $helper->fields_value['EASYMARKETING_SHOP_TOKEN'] =
-            Configuration::get('EASYMARKETING_SHOP_TOKEN');
-        $helper->fields_value['EASYMARKETING_EXPORT_COMBINATIONS'] =
-            Configuration::get('EASYMARKETING_EXPORT_COMBINATIONS');
-        $helper->fields_value['EASYMARKETING_EXPORT_COMBINATIONS'] =
-            Configuration::get('EASYMARKETING_EXPORT_COMBINATIONS');
-        $helper->fields_value['EASYMARKETING_CONVERSION_TRACKER_ENABLED'] =
-            Configuration::get('EASYMARKETING_CONVERSION_TRACKER_ENABLED');
-        $helper->fields_value['EASYMARKETING_PROD_DESCR'] =
-            Configuration::get('EASYMARKETING_PROD_DESCR');
-        $helper->fields_value['EASYMARKETING_LEAD_TRACKER_ENABLED'] =
-            Configuration::get('EASYMARKETING_LEAD_TRACKER_ENABLED');
-        $helper->fields_value['EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED'] =
-            Configuration::get('EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED');
-        $helper->fields_value['EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED'] =
-            Configuration::get('EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED');
-
-        $helper->fields_value['EASYMARKETING_LOG_ENABLED'] =
-            Configuration::get('EASYMARKETING_LOG_ENABLED');
+        $helper->fields_value[self::$conf_prefix.'ACCESS_TOKEN'] = Configuration::get(self::$conf_prefix.'ACCESS_TOKEN');
+        $helper->fields_value[self::$conf_prefix.'SHOP_TOKEN'] = Configuration::get(self::$conf_prefix.'SHOP_TOKEN');
+        $helper->fields_value[self::$conf_prefix.'PROD_DESCR'] = Configuration::get(self::$conf_prefix.'PROD_DESCR');
+        $helper->fields_value[self::$conf_prefix.'LOG_ENABLED'] = Configuration::get(self::$conf_prefix.'LOG_ENABLED');
 
         return $helper->generateForm(array($this->getFormFieldsSettings()));
+    }
+
+    protected function isPSR()
+    {
+        if (Configuration::hasKey(self::$psr_access_token_conf_key)) {
+            return true;
+        }
+        return false;
     }
 
     protected function displayCategories()
@@ -812,7 +587,7 @@ class Easymarketing extends Module
         }
 
         // selected categories
-        $indexedCategories = Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_CATEGORIES'));
+        $indexedCategories = Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_CATEGORIES'));
         $content = array();
         $done = false;
 
@@ -825,8 +600,8 @@ class Easymarketing extends Module
 
     protected function displaySiteVerification()
     {
-        $site_verification_completed = Configuration::get('EASYMARKETING_SITE_VERIFICATION_COMPLETED');
-        $site_verification_status = Tools::jsonDecode(Configuration::get('EASYMARKETING_SITE_VERIFICATION_STATUS'));
+        $site_verification_completed = Configuration::get(self::$conf_prefix.'SITE_VERIFICATION_COMPLETED');
+        $site_verification_status = Tools::jsonDecode(Configuration::get(self::$conf_prefix.'SITE_VERIFICATION_STATUS'));
 
         $this->context->smarty->assign(array(
             'display_button' => $site_verification_completed != 1,
@@ -836,20 +611,29 @@ class Easymarketing extends Module
         return $this->display(__FILE__, 'site_verification.tpl');
     }
 
-    protected function displayTrackerCodes()
-    {
-        return $this->display(__FILE__, 'tracker_codes.tpl');
-    }
-
     protected function displayAttributesMapping()
     {
-        $attrMapping = Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_ATTRIBUTES_MAPPING'));
+        $attrMapping = Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_ATTRIBUTES_MAPPING'));
         //get group of attributes
         $attr_result = array();
         $attrGroups = AttributeGroup::getAttributesGroups($this->context->language->id);
         foreach ($attrGroups as $ag) {
-            $attr_result[$ag['id_attribute_group']] = array(
+            if (!isset($attr_result['attributes'])) {
+                $attr_result['attributes'] = array();
+            }
+            $attr_result['attributes'][$ag['id_attribute_group']] = array(
                 'name' => $ag['name']
+            );
+        }
+
+        // features
+        $features = Feature::getFeatures($this->context->language->id);
+        foreach ($features as $f) {
+            if (!isset($attr_result['features'])) {
+                $attr_result['features'] = array();
+            }
+            $attr_result['features']['f_'.$f['id_feature']] = array(
+                'name' => $f['name']
             );
         }
 
@@ -892,15 +676,15 @@ class Easymarketing extends Module
         $level = $currentCategoryData['level_depth'] + 1;
 
         $selected = false;
-        $name = false;
+        //$name = false;
 
         $rootCategory = false;
         if (is_array($indexedCategories)) {
             foreach ($indexedCategories as $categoryData) {
-                if (array_key_exists('id_category', $categoryData) && array_key_exists('name', $categoryData)) {
+                if (array_key_exists('id_category', $categoryData)/* && array_key_exists('name', $categoryData)*/) {
                     if ($current == (int)$categoryData->id_category) {
                         $selected = true;
-                        $name = $categoryData->name;
+                        //$name = $categoryData->name;
                         $rootCategory = $categoryData->root;
                     }
                 }
@@ -918,7 +702,7 @@ class Easymarketing extends Module
             'todo' => $todo,
             'doneC' => $doneC,
             'category_name' => Tools::stripslashes($currentCategoryData['name']),
-            'category_name_raw' => $name,
+            //'category_name_raw' => $name,
             'all_children' => implode(';', $currentCategoryData['allchildren']),
             'children' => implode(';', $currentCategoryData['children'])
         );
@@ -930,6 +714,7 @@ class Easymarketing extends Module
         if (is_array($currentCategoryData['children']) &&
             count($currentCategoryData['children']) > 0
         ) {
+
             foreach ($currentCategoryData['children'] as $child) {
                 self::recurseCategoryForInclude(
                     $indexedCategories,
@@ -965,206 +750,96 @@ class Easymarketing extends Module
 
     protected function getFormFieldsSettings()
     {
-        $conversion_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_CONVERSION_TRACKER')));
-        $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_LEAD_TRACKER')));
-        $remarketing_code = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_GOOGLE_REMARKETING_CODE')));
-        $badge_code = urldecode(Configuration::get('EASYMARKETING_FACEBOOK_BADGE_CODE'));
-
-        return array(
+        $form_fields = array(
             'form' => array(
                 'id_form' => 'export_categories',
                 'legend' => array(
                     'title' => $this->l('Global Settings'),
                     'icon' => 'icon-export',
                 ),
-                'input' => array(
-                    array(
-                        'name' => 'EASYMARKETING_ACCESS_TOKEN',
-                        'type' => 'text',
-                        'label' => $this->l('Access token'),
-                        'desc' => $this->l('The user needs to copy+paste this from his EASYMARKETING account. This is used to access EASYMARKETING webservices like returning daily user statistics, a conversion tracker to measure sales etc.'),
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_SHOP_TOKEN',
-                        'type' => 'text',
-                        'label' => $this->l('Shop token'),
-                        'desc' => $this->l('It will be used for authentication for the requests to the webservice you will implement specified below.'),
-                    ),
-                    array(
-                        'type' => 'html',
-                        'name' => 'site_verification',
-                        'label' => $this->l('Google Site Verification'),
-                        'html_content' => $this->displaySiteVerification(),
-                        'desc' => $this->l('Privacy is important to Google, we need to know you own a site before we\'ll show you certain information about it or enable you to use our tools.')
-                    ),
-                    array(
-                        'type' => 'html',
-                        'name' => 'trackers code',
-                        'label' => $this->l('Trackers codes'),
-                        'html_content' => $this->displayTrackerCodes(),
-                        'desc' => $this->l('You have to get tracker code (conversion tracker, lead tracker, facebook badge and remarketing) for placing it on your shop.')
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_EXPORT_COMBINATIONS',
-                        'type' => 'switch',
-                        'label' => $this->l('Export Combinations'),
-                        'desc' => $this->l(''),
-                        'is_bool' => true,
-                        'values' => array(
-                            array(
-                                'value' => 1,
-                            ),
-                            array(
-                                'value' => 0,
-                            )
-                        ),
-                    ),
-                    array(
-                        'type' => 'html',
-                        'name' => 'categories',
-                        'label' => $this->l('Export Categories'),
-                        'html_content' => $this->displayCategories(),
-                    ),
-                    array(
-                        'type' => 'html',
-                        'name' => 'attributes',
-                        'label' => $this->l('Attributes mapping'),
-                        'html_content' => $this->displayAttributesMapping(),
-                    ),
-                    array(
-                        'type' => 'select',
-                        'label' => $this->l('Product description mapping'),
-                        'name' => 'EASYMARKETING_PROD_DESCR',
-                        'options' => $this->arrayToFormInputOptions($this->getProductDescriptionFieldNames()),
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_CONVERSION_TRACKER_ENABLED',
-                        'type' => 'switch',
-                        'label' => $this->l('Enable Google conversion tracker'),
-                        'desc' => $this->l(
-                            'Conversion Tracker Code will be integrated on the vendor\'s checkout success page.'
-                        ).' '.
-                            (isset($conversion_tracker->user_id) ? 'user_id:'.$conversion_tracker->user_id : '').
-                            (isset($conversion_tracker->code) ? ' , google code' : '').
-                            (isset($conversion_tracker->fb_code) ? ' , fb code' : ''),
-
-                        'disabled' => !(isset($conversion_tracker->code) || isset($conversion_tracker->fb_code)),
-                        'is_bool' => true,
-                        'values' => array(
-                            array(
-                                'value' => 1,
-                            ),
-                            array(
-                                'value' => 0,
-                            )
-                        ),
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_LEAD_TRACKER_ENABLED',
-                        'type' => 'switch',
-                        'label' => $this->l('Enable Google lead tracker'),
-                        'desc' => $this->l('Lead tracker will be integrated on two pages, the contact pages as well as the checkout page.').
-                            (($lead_tracker == null) ? ' LEAD TRACKER CODE DOES NOT EXIST.' : ''),
-                        'is_bool' => true,
-                        'disabled' => ($lead_tracker == null) ? true : false,
-                        'values' => array(
-                            array(
-                                'value' => 1,
-                            ),
-                            array(
-                                'value' => 0,
-                            )
-                        ),
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED',
-                        'type' => 'switch',
-                        'label' => $this->l('Enable Google Remarketing'),
-                        'desc' => $this->l('Remarketing Code will be integrated on each page of the site').
-                            (($remarketing_code == null) ? ' REMARKETING CODE DOES NOT EXIST.' : ''),
-                        'is_bool' => true,
-                        'disabled' => ($remarketing_code == null) ? true : false,
-                        'values' => array(
-                            array(
-                                'value' => 1,
-                            ),
-                            array(
-                                'value' => 0,
-                            )
-                        ),
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED',
-                        'type' => 'switch',
-                        'label' => $this->l('Enable Facebook Badge'),
-                        'desc' => $this->l('Like button on the vendor\'s checkout success page').
-                            ((trim($badge_code) == '') ? ' FACEBOOK BADGE CODE DOES NOT EXIST.' : ''),
-                        'is_bool' => true,
-                        'disabled' => (trim($badge_code) == '') ? true : false,
-                        'values' => array(
-                            array(
-                                'value' => 1,
-                            ),
-                            array(
-                                'value' => 0,
-                            )
-                        ),
-                    ),
-                    array(
-                        'type' => 'html',
-                        'name' => 'cron',
-                        'html_content' => $this->l('Cron is a job scheduler for Unix-based systems and it\'s a very handy tool, as you can schedule some routine tasks to run automatically, no matter if you or anyone else is present on your website: as long as the server hosting your site is running, cron will do it\'s job. To activate cron for this module, add the line below to your crontab file.').
-                            '<p>'.$this->l('This cron job will get updates codes of trackers every night at 1:00am.').
-                            ' '.$this->l('It has same action as manually pressing button').
-                            ' "'.$this->l('Download trackers codes').'".'.
-                            '<p><code>1 * * * * php -f '.dirname(__FILE__).DIRECTORY_SEPARATOR.'cron.php token='.
-                                Tools::substr(Tools::encrypt('easymarketing/cron'), 0, 10).'</code>'.
-                            '<p>or use URL: <code>'.Tools::getProtocol(Tools::usingSecureMode()).$_SERVER['HTTP_HOST'].
-                                $this->getPathUri().'cron.php?token='.
-                                Tools::substr(Tools::encrypt('easymarketing/cron'), 0, 10).'</code>'
-                    ),
-                    array(
-                        'name' => 'EASYMARKETING_LOG_ENABLED',
-                        'type' => 'switch',
-                        'label' => $this->l('Enable Log'),
-                        'desc' => $this->l('Logs of actions in').' '.dirname(__FILE__).DIRECTORY_SEPARATOR.
-                            'logs '.$this->l('directory.'),
-                        'is_bool' => true,
-                        'disabled' => false,
-                        'values' => array(
-                            array(
-                                'value' => 1,
-                            ),
-                            array(
-                                'value' => 0,
-                            )
-                        ),
-                    ),
-                ),
+                'input' => array(),
                 'submit' => array(
                     'title' => $this->l('Save options'),
                     'name' => 'submitSaveOptions',
                 ),
             ),
         );
+
+        $inputs = array();
+
+        if (!$this->isPSR()) {
+           $inputs = array_merge($inputs, array(
+               array(
+                   'name' => self::$conf_prefix.'ACCESS_TOKEN',
+                   'type' => 'text',
+                   'label' => $this->l('Access token'),
+                   'desc' => $this->l('The user needs to copy+paste this from his EMARKETING account. This is used to access EMARKETING webservices like returning daily user statistics, a conversion tracker to measure sales etc.'),
+               )
+           ));
+        }
+
+        $inputs = array_merge($inputs, array(
+            array(
+                'name' => self::$conf_prefix.'SHOP_TOKEN',
+                'type' => 'text',
+                'label' => $this->l('Shop token'),
+                'desc' => $this->l('It will be used for authentication for the requests to the webservice you will implement specified below.'),
+            ),
+            /*array(
+                'type' => 'html',
+                'name' => 'site_verification',
+                'label' => $this->l('Google Site Verification'),
+                'html_content' => $this->displaySiteVerification(),
+                'desc' => $this->l('Privacy is important to Google, we need to know you own a site before we\'ll show you certain information about it or enable you to use our tools.')
+            ),
+            */
+            array(
+                'type' => 'html',
+                'name' => 'categories',
+                'label' => $this->l('Export Categories'),
+                'html_content' => $this->displayCategories(),
+            ),
+            array(
+                'type' => 'html',
+                'name' => 'attributes',
+                'label' => $this->l('Attributes mapping'),
+                'html_content' => $this->displayAttributesMapping(),
+            ),
+            array(
+                'type' => 'select',
+                'label' => $this->l('Product description mapping'),
+                'name' => self::$conf_prefix.'PROD_DESCR',
+                'options' => $this->arrayToFormInputOptions($this->getProductDescriptionFieldNames()),
+            ),
+            array(
+                'name' => self::$conf_prefix.'LOG_ENABLED',
+                'type' => 'switch',
+                'label' => $this->l('Enable Log'),
+                'desc' => $this->l('Logs of actions in').' '.dirname(__FILE__).DIRECTORY_SEPARATOR.
+                    'logs '.$this->l('directory.'),
+                'is_bool' => true,
+                'disabled' => false,
+                'values' => array(
+                    array(
+                        'value' => 1,
+                    ),
+                    array(
+                        'value' => 0,
+                    )
+                ),
+            ),
+        ));
+
+        $form_fields['form']['input'] = $inputs;
+
+        return $form_fields;
     }
 
     public function postProcess()
     {
         $this->_errors = array();
-        /*
-         *  ROUTE DOWNLOAD, SAVE, AND SHOW TRACKER
-
-        $this->downloadConversionTracker();
-        print_r(Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_CONVERSION_TRACKER'))));
-        */
 
         /*
-         *   ROUTE GOOGLE REMARKETING
-        $this->downloadGoogleRemarketingCode();
-        print_r(Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_GOOGLE_REMARKETING_CODE'))));
-        */
-        //print_r($this->_errors);
         if (Tools::isSubmit('submitDoSiteVerification')) {
             if ($this->doGoogleSiteVerification()) {
                 return $this->displayConfirmation($this->l('Site verification is completed'));
@@ -1172,43 +847,25 @@ class Easymarketing extends Module
                 $this->_errors[] = $this->l('Site verification has not been completed');
             }
         }
-
-        if (Tools::isSubmit('submitGetTrackerCodes')) {
-            $return = true;
-            $return &= $this->downloadConversionTracker();
-            $return &= $this->downloadLeadTracker();
-            $return &= $this->downloadGoogleRemarketingCode();
-            $return &= $this->downloadFacebookBadge();
-            if ($return && (count($this->_errors) == 0)) {
-                return $this->displayConfirmation($this->l('"Download trackers code" operation is completed'));
-            } else {
-                $this->_errors[] = $this->l('"Download trackers code" operation has not been completed');
-            }
-        }
-
+        */
 
         // Generelle Einstellungen
         if (Tools::isSubmit('submitSaveOptions')) {
             // Global Settings
-            if (!Configuration::updateValue(
-                'EASYMARKETING_ACCESS_TOKEN',
-                Tools::getValue('EASYMARKETING_ACCESS_TOKEN')
-            )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_ACCESS_TOKEN';
+            if (!$this->isPSR()) {
+                if (!Configuration::updateValue(
+                    self::$conf_prefix.'ACCESS_TOKEN',
+                    Tools::getValue(self::$conf_prefix.'ACCESS_TOKEN')
+                )) {
+                    $this->_errors[] = $this->l('Could not update').': EMARKETING_ACCESS_TOKEN';
+                }
             }
 
             if (!Configuration::updateValue(
-                'EASYMARKETING_SHOP_TOKEN',
-                Tools::getValue('EASYMARKETING_SHOP_TOKEN')
+                self::$conf_prefix.'SHOP_TOKEN',
+                Tools::getValue(self::$conf_prefix.'SHOP_TOKEN')
             )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_SHOP_TOKEN';
-            }
-
-            if (!Configuration::updateValue(
-                'EASYMARKETING_EXPORT_COMBINATIONS',
-                (int)Tools::getValue('EASYMARKETING_EXPORT_COMBINATIONS')
-            )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_EXPORT_COMBINATIONS';
+                $this->_errors[] = $this->l('Could not update').': EMARKETING_SHOP_TOKEN';
             }
 
             $selected_cat = array();
@@ -1216,7 +873,7 @@ class Easymarketing extends Module
             if (is_array($categories)) {
                 $i = 0;
                 foreach ($categories as $category) {
-                    if (array_key_exists('id_category', $category) && array_key_exists('name', $category)) {
+                    if (array_key_exists('id_category', $category)/* && array_key_exists('name', $category)*/) {
                         $selected_cat[$i] = $category;
                         if ($selected_cat[$i]['id_category'] == (int)Tools::getValue('categoryRoot')) {
                             $selected_cat[$i]['root'] = true;
@@ -1228,8 +885,8 @@ class Easymarketing extends Module
                 }
             }
 
-            if (!Configuration::updateValue('EASYMARKETING_EXPORT_CATEGORIES', Tools::jsonEncode($selected_cat))) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_EXPORT_CATEGORIES';
+            if (!Configuration::updateValue(self::$conf_prefix.'EXPORT_CATEGORIES', Tools::jsonEncode($selected_cat))) {
+                $this->_errors[] = $this->l('Could not update').': EMARKETING_EXPORT_CATEGORIES';
             }
 
             $attr_mapping = array();
@@ -1243,60 +900,32 @@ class Easymarketing extends Module
             }
 
             if (!Configuration::updateValue(
-                'EASYMARKETING_EXPORT_ATTRIBUTES_MAPPING',
+                self::$conf_prefix.'EXPORT_ATTRIBUTES_MAPPING',
                 Tools::jsonEncode($attr_mapping)
             )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_EXPORT_ATTRIBUTES_MAPPING';
+                $this->_errors[] = $this->l('Could not update').': EMARKETING_EXPORT_ATTRIBUTES_MAPPING';
             }
 
             if (!Configuration::updateValue(
-                'EASYMARKETING_PROD_DESCR',
-                Tools::getValue('EASYMARKETING_PROD_DESCR')
+                self::$conf_prefix.'PROD_DESCR',
+                Tools::getValue(self::$conf_prefix.'PROD_DESCR')
             )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_PROD_DESCR';
+                $this->_errors[] = $this->l('Could not update').': EMARKETING_PROD_DESCR';
             }
 
             if (!Configuration::updateValue(
-                'EASYMARKETING_CONVERSION_TRACKER_ENABLED',
-                (int)Tools::getValue('EASYMARKETING_CONVERSION_TRACKER_ENABLED')
+                self::$conf_prefix.'LOG_ENABLED',
+                (int)Tools::getValue(self::$conf_prefix.'LOG_ENABLED')
             )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_CONVERSION_TRACKER_ENABLED';
+                $this->_errors[] = $this->l('Could not update').': EMARKETING_LOG_ENABLED';
             }
 
-            if (!Configuration::updateValue(
-                'EASYMARKETING_LEAD_TRACKER_ENABLED',
-                (int)Tools::getValue('EASYMARKETING_LEAD_TRACKER_ENABLED')
-            )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_LEAD_TRACKER_ENABLED';
-            }
-
-            if (!Configuration::updateValue(
-                'EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED',
-                (int)Tools::getValue('EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED')
-            )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED';
-            }
-
-            if (!Configuration::updateValue(
-                'EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED',
-                (int)Tools::getValue('EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED')
-            )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED';
-            }
-
-
-            if (!Configuration::updateValue(
-                'EASYMARKETING_LOG_ENABLED',
-                (int)Tools::getValue('EASYMARKETING_LOG_ENABLED')
-            )) {
-                $this->_errors[] = $this->l('Could not update').': EASYMARKETING_LOG_ENABLED';
-            }
-
-            $this->uploadEndpoints();
+            //$this->uploadEndpoints();
 
             if (count($this->_errors) <= 0) {
                 return $this->displayConfirmation($this->l('Settings updated'));
             }
+
         }
     }
 
@@ -1527,7 +1156,7 @@ class Easymarketing extends Module
         }
 
         if (isset($configuration['PS_SHIPPING_FREE_WEIGHT'])
-            && $cart->getTotalWeight() >= (float)$configuration['PS_SHIPPING_FREE_WEIGHT']
+            && $cart->getTotalWeight($products) >= (float)$configuration['PS_SHIPPING_FREE_WEIGHT']
             && (float)$configuration['PS_SHIPPING_FREE_WEIGHT'] > 0
         ) {
             Cache::store($cache_id, $shipping_cost);
@@ -1580,6 +1209,7 @@ class Easymarketing extends Module
             } else {
                 $shipping_cost += $carrier->getDeliveryPriceByPrice($order_total, $id_zone, (int)$cart->id_currency);
             }
+
         }
 
         // Adding handling charges
@@ -1951,11 +1581,7 @@ class Easymarketing extends Module
 
         if (count(self::$export_categories) == 0) {
             self::$export_categories =
-                Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_CATEGORIES'));
-        }
-
-        if (count(self::$google_category_names) == 0) {
-            self::$google_category_names = $this->getGoogleCategoryNames();
+                Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_CATEGORIES'));
         }
 
         if ($id_categories == false) {
@@ -1977,7 +1603,7 @@ class Easymarketing extends Module
 
         if (count(self::$attr_mappings) == 0) {
             self::$attr_mappings =
-                Tools::jsonDecode(Configuration::get('EASYMARKETING_EXPORT_ATTRIBUTES_MAPPING'), true);
+                Tools::jsonDecode(Configuration::get(self::$conf_prefix.'EXPORT_ATTRIBUTES_MAPPING'), true);
         }
 
         $front = true;
@@ -1986,7 +1612,7 @@ class Easymarketing extends Module
         }
 
         if (!Validate::isOrderBy($order_by) || !Validate::isOrderWay($order_way)) {
-            die(Tools::displayError());
+            die (Tools::displayError());
         }
         if ($order_by == 'id_product' || $order_by == 'price' || $order_by == 'date_add' || $order_by == 'date_upd') {
             $order_by_prefix = 'p';
@@ -2116,7 +1742,7 @@ class Easymarketing extends Module
         // 2. get combinations
         $rcombinations = array();
         $sql_combinations = '';
-        if (Combination::isFeatureActive() && Configuration::get('EASYMARKETING_EXPORT_COMBINATIONS') == 1) {
+        if (Combination::isFeatureActive()) {
             $sql = new DbQuery();
 
             $sql->select('p.`id_product`, p.`condition`, product_shop.`id_shop`, pl.`name`, p.`is_virtual`,
@@ -2157,9 +1783,10 @@ class Easymarketing extends Module
                 (int)$id_lang.Shop::addSqlRestrictionOnLang('cl', 'product_shop.id_shop')
             );
 
-            $sql->leftJoin('specific_price', 'sp', 'sp.`id_product` = p.`id_product`');
-            // AND 'sp.`id_shop` = cp.`id_shop`
+            $sql->leftJoin('specific_price', 'sp', 'sp.`id_product` = p.`id_product`'); // AND 'sp.`id_shop` = cp.`id_shop`
+
             // @todo test if everything is ok, then refactorise call of this method
+
 
             if ($id_categories) {
                 $sql->leftJoin('category_product', 'c', 'c.`id_product` = p.`id_product`');
@@ -2199,15 +1826,13 @@ class Easymarketing extends Module
             $sql->groupBy('unique_id');
 
             // Build ORDER BY
-            //$sql->orderBy((isset($order_by_prefix) ? pSQL($order_by_prefix).'.' : '')
-            //.'`'.pSQL($order_by).'` '.pSQL($order_way));
+            //$sql->orderBy((isset($order_by_prefix) ? pSQL($order_by_prefix).'.' : '').'`'.pSQL($order_by).'` '.pSQL($order_way));
 
             //if ($limit) {
             //$sql->limit((int)$limit, (int)$start);
             //}
             //				pai.`id_image` as pai_id_image, il.`legend` as pai_legend,
-            $sql->select('pa.`id_product_attribute`, product_attribute_shop.`price` AS price_attribute,
-                product_attribute_shop.`ecotax` AS ecotax_attr,
+            $sql->select('pa.`id_product_attribute`, product_attribute_shop.`price` AS price_attribute, product_attribute_shop.`ecotax` AS ecotax_attr,
 				IF (IFNULL(pa.`reference`, \'\') = \'\', p.`reference`, pa.`reference`) AS reference,
 				(p.`weight`+ pa.`weight`) weight_attribute,
 				IF (IFNULL(pa.`ean13`, \'\') = \'\', p.`ean13`, pa.`ean13`) AS ean13,
@@ -2279,94 +1904,25 @@ class Easymarketing extends Module
             }
         }
 
-        //print_r($rproducts);
-
-        // remove products which have combinations
-        /*
-        if (count($rcombinations))
-        {
-            foreach ($rcombinations as $c => $combination)
-            {
-                //remove parent product
-                foreach ($rproducts as $k => $product)
-                {
-                    if ($product['id_product'] == $combination['id_product'])
-                    {
-                        unset($rproducts[$k]);
-                        break;
-                    }
-                }
-
-                //name and attribute
-
-                $sql = 'SELECT ag.`id_attribute_group`, agl.`name` AS group_name, al.`name`  AS attribute_name  ,
-                        a.`id_attribute` FROM `'._DB_PREFIX_.'product_attribute` pa
-                        LEFT JOIN `'._DB_PREFIX_.'product_attribute_combination` pac
-                        ON  pac.`id_product_attribute` = pa.`id_product_attribute`
-                        LEFT JOIN `'._DB_PREFIX_.'attribute` a
-                        ON  a.`id_attribute` = pac.`id_attribute`
-                        LEFT JOIN `'._DB_PREFIX_.'attribute_group` ag
-                        ON  ag.`id_attribute_group` = a.`id_attribute_group`
-                        LEFT JOIN `'._DB_PREFIX_.'attribute_lang` al
-                        ON  a.`id_attribute` = al.`id_attribute`
-                        LEFT JOIN `'._DB_PREFIX_.'attribute_group_lang` agl
-                        ON  ag.`id_attribute_group` = agl.`id_attribute_group`
-                        '.self::addShopSqlAssociation('product_attribute', 'pa', true, null, false,
-                        $this->context->shop->id).'
-                        WHERE al.`id_lang`='.(int)($id_lang).'
-                        AND  agl.`id_lang`='.(int)($id_lang).'
-                        AND  pa.`id_product_attribute` = '.(int)($combination['id_product_attribute']).'
-
-                        ORDER BY ag.`id_attribute_group` ASC';
-                $rattr = Db::getInstance()->ExecuteS($sql);
-
-                $newProductName = array();
-                foreach ($rattr as $attribute)
-                {
-                    $newProductName[] = trim($attribute['group_name']).': '.trim($attribute['attribute_name']);
-
-                    $rcombinations[$c]['attributes'][$attribute['id_attribute_group']] = $attribute;
-                }
-
-                $rcombinations[$c]['name']  = $rcombinations[$c]['name'].' ('.implode(', ', $newProductName).')';
+        //features
+        foreach ($rproducts as $k => $product) {
+            $features = Product::getFeaturesStatic($product['id_product']);
+            foreach ($features as $kf => $f) {
+                $feature = new FeatureValue($f['id_feature_value'], $id_lang);
+                $features[$kf]['value'] = $feature->value;
             }
+            $rproducts[$k]['features'] = $features;
         }
-        */
 
-        // merge arrays
-        //$rproducts = array_merge($rproducts, $rcombinations);
-        //unset($rcombinations);
 
-        // sort by unique_id
-        /*self::orderbyUniqueId($rproducts);
-
-        // reindex
-        $rproducts = array_values($rproducts);
-        // truncate
-        $size_rproducts = count($rproducts);
-
-        if ((int)$limit <= 0) $limit = 1;
-        $start_limit = $start + $limit;
-        $result = array();
-        for ($k = $start; $k < ((($size_rproducts) < $start_limit)?($size_rproducts):$start_limit); $k++)
-        {
-            if (!isset($rproducts[$k]['id_product_attribute'])) $rproducts[$k]['id_product_attribute'] = null;
-            $result[] = $rproducts[$k];
-        }
-        unset($rproducts);
-        */
-        $result = $rproducts;
-
-        foreach ($result as $k => &$row) {
+        foreach ($rproducts as $k => &$row) {
             $row = Product::getTaxesInformations($row);
             if (!isset($row[$k]['id_product_attribute']) || $row[$k]['id_product_attribute'] == 0) {
                 $row[$k]['id_product_attribute'] = null;
             }
         }
 
-        //echo '<pre>'.print_r(self::$export_categories, true).'</pre>';
-        //echo '<pre>'.print_r($result, true).'</pre>';
-        return ($result);
+        return $rproducts;
     }
 
     public static function orderbyUniqueId(&$array)
@@ -2396,66 +1952,48 @@ class Easymarketing extends Module
         return $productIds;
     }
 
-    public function getBestProducts($limit, $most_sold_since)
-    {
-        $product_res = array();
-
-        $sales = $this->getBestSales($limit, $most_sold_since);
-
-        foreach ($sales as $product) {
-            $product_res[] = array(
-                'id' => $product['unique_id'],
-                'sales' => (int)$product['sum']
-            );
-        }
-
-        return $product_res;
-    }
-
     public function createUniqueId($id_product, $id_product_attribute = 0)
     {
         return '1'.str_pad($id_product, 7, '0', STR_PAD_LEFT).str_pad($id_product_attribute, 7, '0', STR_PAD_LEFT);
     }
 
-    public function getBestSales($limit = 10, $most_sold_since = false)
+    public function getProductAttributeImages($id_product_attribute)
     {
-        if ((int)$limit < 0) {
-            $limit = 0;
-        }
-        if ((int)$most_sold_since < 0) {
-            $most_sold_since = 0;
-        }
-
-        $rsales = array();
-        if (Configuration::get('EASYMARKETING_EXPORT_COMBINATIONS') == 1) {
-            $rsales = Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS(
-                'SELECT CONCAT(1, LPAD(od.`product_id`, 7, 0), LPAD(od.`product_attribute_id`, 7, 0)) AS unique_id,
-				od.product_id, od.product_attribute_id,	SUM(od.product_quantity) sum
-				FROM '._DB_PREFIX_.'order_detail od, '._DB_PREFIX_.'orders o
-				WHERE od.id_shop='.(int)$this->context->shop->id.' AND od.id_order=o.id_order
-				AND UNIX_TIMESTAMP(o.`date_add`) > '.(int)$most_sold_since.
-                ' GROUP BY od.product_id, od.product_attribute_id ORDER BY sum DESC LIMIT '.(int)$limit
-            );
-        } else {
-            $rsales = Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS(
-                'SELECT CONCAT(1, LPAD(od.`product_id`, 7, 0), LPAD(0, 7, 0)) AS unique_id,
-				od.product_id,	SUM(od.product_quantity) sum
-				FROM '._DB_PREFIX_.'order_detail od,'._DB_PREFIX_.'orders o
-				WHERE od.id_shop='.(int)$this->context->shop->id.' AND od.id_order=o.id_order
-				AND UNIX_TIMESTAMP(o.`date_add`) > '.(int)$most_sold_since.
-                ' GROUP BY od.product_id ORDER BY sum DESC LIMIT '.(int)$limit
-            );
-        }
-
-        return $rsales;
+        return Db::getInstance(_PS_USE_SQL_SLAVE_)->executeS('
+			SELECT a.`id_image` as id
+			FROM `'._DB_PREFIX_.'product_attribute_image` a
+			'.Shop::addSqlAssociation('product_attribute', 'a').'
+			WHERE a.`id_product_attribute` = '.(int) $id_product_attribute.'
+		');
     }
 
     public function getProductInfo($product, $shipping_carriers, $id_lang, $currency)
     {
-        //echo '<pre>'.print_r($product, true).'</pre>';
-
         $cart = $this->getCart($currency);
         $cover = Product::getCover($product['id_product']);
+        $p = new Product($product['id_product']);
+        $images = $p->getImages($id_lang);
+        $image_url = '';
+        $additional_image_links = '';
+        if ($cover) {
+            $image_url = $this->context->link->getImageLink(
+                $product['link_rewrite'],
+                $product['id_product'].'-'.$cover['id_image'],
+                null
+            );
+            if (count($images) > 1) {
+                foreach ($images as $im) {
+                    if ($im['cover'] != 1) {
+                        $additional_image_links = $this->context->link->getImageLink(
+                            $product['link_rewrite'],
+                            $product['id_product'].'-'.$im['id_image'],
+                            null
+                        );
+                        break;
+                    }
+                }
+            }
+        }
 
         $shipping = array();
         foreach ($shipping_carriers as $shipping_carrier) {
@@ -2490,16 +2028,16 @@ class Easymarketing extends Module
         }
 
         $description_field_name = 'description';
-        if (in_array(
-            Configuration::get('EASYMARKETING_PROD_DESCR'),
-            array_keys($this->getProductDescriptionFieldNames())
-        )) {
-            $description_field_name = Configuration::get('EASYMARKETING_PROD_DESCR');
+        if (in_array(Configuration::get(self::$conf_prefix.'PROD_DESCR'), array_keys($this->getProductDescriptionFieldNames()))) {
+            $description_field_name = Configuration::get(self::$conf_prefix.'PROD_DESCR');
         }
 
         $prod = array(
             'id' => $product['unique_id'],
+            'parent_id' => ($product['id_product_attribute'] > 0)?$this->createUniqueId($product['id_product']):'',
             'name' => $product['name'],
+            'target_country' => Country::getIsoById(Configuration::get('PS_COUNTRY_DEFAULT')),
+            'content_language' => Language::getIsoById($id_lang),
             'categories' => Product::getProductCategories($product['id_product']),
             'condition' => $product['condition'],
             'availability' => (Product::getQuantity(
@@ -2525,24 +2063,42 @@ class Easymarketing extends Module
                 null,
                 $id_lang
             ),
-            'image_url' => $this->context->link->getImageLink(
-                $product['link_rewrite'],
-                $product['id_product'].'-'.$cover['id_image'],
-                null
-            ),
+            'image_url' => $image_url,
             'shipping' => $shipping,
             'description' => strip_tags($product[$description_field_name]),
             'gtin' => ($product['ean13'] != '') ? $product['ean13'] : $product['upc'],
 
             //attributes are optional per product
-            'google_category' => isset(self::$google_category_names[$product['id_category_default']]) ?
-                self::$google_category_names[$product['id_category_default']] : '',
+            'google_category' => '',
             'adult' => false,
             'mpn' => $product['reference'],
         );
 
+        if ($image_url != '') {
+            $prod['image_url'] = $image_url;
+        }
+
+        if ($additional_image_links != '') {
+            $prod['additional_image_links'] = $additional_image_links;
+        }
+
         if (Manufacturer::getNameById($product['id_manufacturer']) !== false) {
             $prod['brand'] = Manufacturer::getNameById($product['id_manufacturer']);
+        }
+
+
+
+        foreach (self::$fields_for_attributes_mapping as $field) {
+            if (isset(self::$attr_mappings[$field]['id_attribute_group']) &&
+                strpos(self::$attr_mappings[$field]['id_attribute_group'], 'f_') !== false
+            ) {
+                foreach ($product['features'] as $f) {
+                    if ($f['id_feature'] == Tools::str_replace_once('f_', '', self::$attr_mappings[$field]['id_attribute_group'])) {
+                        $prod[$field] = $f['value'];
+                        break;
+                    }
+                }
+            }
         }
 
         //Variant products - combinations
@@ -2569,13 +2125,27 @@ class Easymarketing extends Module
                     $product['id_product'].'-'.$product['pai_id_image'],
                     null
                 );
+
+                $a_images = $this->getProductAttributeImages($product['id_product_attribute']);
+                unset($prod['additional_image_links']);
+                if ($a_images) {
+                    foreach ($a_images as $im) {
+                        if ($im['id_image'] != $product['pai_id_image']) {
+                            $prod['additional_image_links'] = $this->context->link->getImageLink(
+                                $product['link_rewrite'],
+                                $product['id_product'].'-'.$im['id_image'],
+                                null
+                            );
+                            break;
+                        }
+                    }
+                }
             }
 
             //additional fields for attributes
-
             foreach (self::$fields_for_attributes_mapping as $field) {
                 if (isset(self::$attr_mappings[$field]['id_attribute_group']) &&
-                    self::$attr_mappings[$field]['id_attribute_group'] > 0 &&
+                    strpos(self::$attr_mappings[$field]['id_attribute_group'], 'f_') === false && self::$attr_mappings[$field]['id_attribute_group'] > 0 &&
                     isset($product['attributes'][self::$attr_mappings[$field]['id_attribute_group']]['attribute_name'])
                 ) {
                     $prod[$field] = $product['attributes'][self::$attr_mappings[$field]['id_attribute_group']]['attribute_name'];
@@ -2589,6 +2159,22 @@ class Easymarketing extends Module
             $prod['size'] = '';    // The size String like L', XL
             $prod['size_type'] = '';    //String like Normalgröße', XL
             $prod['size_system'] = ''; //String like DE', EU, US
+
+            availability_date
+
+            excluded_destination
+            included_destination
+            is_bundle
+            multipack
+            promotion_id
+            sale_price
+            sale_price_effective_date
+            shipping_length
+            shipping_width
+            shipping_height
+            shipping_weight
+            tax
+
             */
         }
 
@@ -2671,39 +2257,33 @@ class Easymarketing extends Module
     public function hookOrderConfirmation($params)
     {
         $return = '';
-        if (Configuration::get('EASYMARKETING_CONVERSION_TRACKER_ENABLED')) {
-            $conversion_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_CONVERSION_TRACKER')));
+        $conversion_tracker = Tools::jsonDecode(urldecode(Configuration::get(self::$conf_prefix.'CONVERSION_TRACKER')));
 
-            $tmp = '';
-            if (isset($conversion_tracker->code)) {
-                $tmp .= preg_replace(
-                    '/(google_conversion_value\s=\s.+;)/i',
-                    'google_conversion_value = '.$params['total_to_pay'].';',
-                    $conversion_tracker->code
-                )."\r\n";
-
-                $return .= preg_replace(
-                    '/(value=.+?&)/i',
-                    'value='.$params['total_to_pay'].'&',
-                    $tmp
-                )."\r\n";
-            }
-
-            if (isset($conversion_tracker->fb_code)) {
-                $return .= $conversion_tracker->fb_code."\r\n";
-            }
+        if (isset($conversion_tracker->tag) && $conversion_tracker->tag != '') {
+            $return .= $conversion_tracker->tag."\r\n";
         }
-        if (Configuration::get('EASYMARKETING_FACEBOOK_BADGE_CODE_ENABLED')) {
-            $facebook_badge = urldecode(Configuration::get('EASYMARKETING_FACEBOOK_BADGE_CODE'));
 
-            if (trim($facebook_badge) != '') {
-                $return .= $facebook_badge;
-            }
+        $tmp = '';
+        if (isset($conversion_tracker->snippet) && $conversion_tracker->snippet != '') {
+            $return .= $conversion_tracker->snippet."\r\n";
+            /*$tmp .= preg_replace(
+                '/(google_conversion_value\s=\s.+;)/i',
+                'google_conversion_value = '.$params['total_to_pay'].';',
+                $conversion_tracker->snippet
+            )."\r\n";
+
+            $return .= preg_replace(
+                '/(value=.+?&)/i',
+                'value='.$params['total_to_pay'].'&',
+                $tmp
+            )."\r\n";
+            */
         }
+
         return $return;
     }
 
-    public function hookFooter($params)
+    public function hookHeader($params)
     {
         $return = '';
 
@@ -2718,83 +2298,84 @@ class Easymarketing extends Module
         $default_meta_order = Meta::getMetaByPage('order', $this->context->language->id);
         if ($this->context->controller instanceof OrderController) {
             if ((int)Tools::getValue('step') == 3) {
-                if (Configuration::get('EASYMARKETING_LEAD_TRACKER_ENABLED')) {
-                    $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_LEAD_TRACKER')));
-                    if (isset($lead_tracker->code)) {
-                        $return .= '<!-- google_lead_tracker -->';
-                        $tmp = preg_replace(
-                            '/(google_conversion_value\s=\s.+;)/i',
-                            'google_conversion_value = '.$this->context->cart->getOrderTotal().';',
-                            $lead_tracker->code
-                        )."\r\n";
+                $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get(self::$conf_prefix.'LEAD_TRACKER')));
+                if (isset($lead_tracker->tag) && $lead_tracker->tag != '') {
+                    $return .= $lead_tracker->tag;
+                }
+                if (isset($lead_tracker->snippet) && $lead_tracker->snippet != '') {
+                    $return .= $lead_tracker->snippet."\r\n";
 
-                        $return .= preg_replace(
-                            '/(value=.+?&)/i',
-                            'value='.$this->context->cart->getOrderTotal().'&',
-                            $tmp
-                        )."\r\n";
-                    }
-                    if (isset($lead_tracker->fb_code)) {
-                        $return .= '<!-- fb_lead_tracker -->';
-                        $return .= $lead_tracker->fb_code;
-                    }
+                    /*
+                    $tmp = preg_replace(
+                        '/(google_conversion_value\s=\s.+;)/i',
+                        'google_conversion_value = '.$this->context->cart->getOrderTotal().';',
+                        $lead_tracker->snippet
+                    )."\r\n";
+
+                    $return .= preg_replace(
+                        '/(value=.+?&)/i',
+                        'value='.$this->context->cart->getOrderTotal().'&',
+                        $tmp
+                    )."\r\n";
+                    */
                 }
             }
         }
 
         $default_meta_order = Meta::getMetaByPage('order-opc', $this->context->language->id);
         if ($this->context->controller instanceof OrderOpcController) {
-            if (Configuration::get('EASYMARKETING_LEAD_TRACKER_ENABLED')) {
-                $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_LEAD_TRACKER')));
-                if (isset($lead_tracker->code)) {
-                    $return .= '<!-- google_lead_tracker -->';
-                    $tmp = preg_replace(
-                        '/(google_conversion_value\s=\s.+;)/i',
-                        'google_conversion_value = '.$this->context->cart->getOrderTotal().';',
-                        $lead_tracker->code
-                    )."\r\n";
+            $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get(self::$conf_prefix.'LEAD_TRACKER')));
+            if (isset($lead_tracker->tag) && $lead_tracker->tag != '') {
+                $return .= $lead_tracker->tag;
+            }
+            if (isset($lead_tracker->snippet) && $lead_tracker->snippet != '') {
+                $return .= $lead_tracker->snippet."\r\n";
 
-                    $return .= preg_replace(
-                        '/(value=.+?&)/i',
-                        'value='.$this->context->cart->getOrderTotal().'&',
-                        $tmp
-                    )."\r\n";
-                }
-                if (isset($lead_tracker->fb_code)) {
-                    $return .= '<!-- fb_lead_tracker -->';
-                    $return .= $lead_tracker->fb_code;
-                }
+                /*
+                $tmp = preg_replace(
+                    '/(google_conversion_value\s=\s.+;)/i',
+                    'google_conversion_value = '.$this->context->cart->getOrderTotal().';',
+                    $lead_tracker->snippet
+                )."\r\n";
+
+                $return .= preg_replace(
+                    '/(value=.+?&)/i',
+                    'value='.$this->context->cart->getOrderTotal().'&',
+                    $tmp
+                )."\r\n";
+                */
             }
         }
 
         $default_meta_order = Meta::getMetaByPage('contact', $this->context->language->id);
         if ($this->context->controller instanceof ContactController && Tools::isSubmit('submitMessage')) {
-            if (Configuration::get('EASYMARKETING_LEAD_TRACKER_ENABLED')) {
-                $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get('EASYMARKETING_LEAD_TRACKER')));
-                if (isset($lead_tracker->code)) {
-                    $return .= '<!-- google_lead_tracker -->';
-                    $tmp = preg_replace(
-                        '/(google_conversion_value\s=\s.+;)/i',
-                        'google_conversion_value = '.$this->context->cart->getOrderTotal().';',
-                        $lead_tracker->code
-                    )."\r\n";
+            $lead_tracker = Tools::jsonDecode(urldecode(Configuration::get(self::$conf_prefix.'LEAD_TRACKER')));
+            if (isset($lead_tracker->tag) && $lead_tracker->tag != '') {
+                $return .= $lead_tracker->tag;
+            }
+            if (isset($lead_tracker->snippet) && $lead_tracker->snippet != '') {
+                $return .= $lead_tracker->snippet."\r\n";
 
-                    $return .= preg_replace(
-                        '/(value=.+?&)/i',
-                        'value='.$this->context->cart->getOrderTotal().'&',
-                        $tmp
-                    )."\r\n";
-                }
-                if (isset($lead_tracker->fb_code)) {
-                    $return .= '<!-- fb_lead_tracker -->';
-                    $return .= $lead_tracker->fb_code;
-                }
+                /*
+                $tmp = preg_replace(
+                    '/(google_conversion_value\s=\s.+;)/i',
+                    'google_conversion_value = '.$this->context->cart->getOrderTotal().';',
+                    $lead_tracker->snippet
+                )."\r\n";
+
+                $return .= preg_replace(
+                    '/(value=.+?&)/i',
+                    'value='.$this->context->cart->getOrderTotal().'&',
+                    $tmp
+                )."\r\n";
+                */
             }
         }
 
-        if (Configuration::get('EASYMARKETING_GOOGLE_REMARKETING_CODE_ENABLED')) {
+        /*
+        if (Configuration::get(self::$conf_prefix.'GOOGLE_REMARKETING_CODE_ENABLED')) {
             $remarketing_code = Tools::jsonDecode(
-                urldecode(Configuration::get('EASYMARKETING_GOOGLE_REMARKETING_CODE'))
+                urldecode(Configuration::get(self::$conf_prefix.'GOOGLE_REMARKETING_CODE'))
             );
             if (isset($remarketing_code->code)) {
                 //echo '<pre>Page: '.print_r($this->context->controller->php_self, true).'</pre>';
@@ -2852,12 +2433,12 @@ class Easymarketing extends Module
                             $id_product_attribute = (int)Product::getDefaultAttribute($id_product);
                             $ecomm_pagetype = 'product';
                             $ecomm_prodid = '\''.$this->createUniqueId($id_product, $id_product_attribute).'\'';
-                            /*$ecomm_totalvalue = '\''.Product::getPriceStatic(
-                                (int)$id_product,
-                                false,
-                                $id_product_attribute,
-                                2
-                            ).'\'';*/
+                            //$ecomm_totalvalue = '\''.Product::getPriceStatic(
+                            //    (int)$id_product,
+                            //    false,
+                            //    $id_product_attribute,
+                            //    2
+                            //).'\'';
                             $ecomm_totalvalue = Product::getPriceStatic(
                                 (int)$id_product,
                                 false,
@@ -2952,7 +2533,7 @@ class Easymarketing extends Module
                 );
                 $return .= $code."\n".$remarketing_code->code;
             }
-        }
+        }*/
 
         return $return;
     }
