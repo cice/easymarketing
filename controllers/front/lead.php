@@ -57,7 +57,7 @@ class EmarketingLeadModuleFrontController extends ModuleFrontController
             if ($input_put_data != null) {
                 $data = Tools::jsonDecode($input_put_data, true);
             }
-            if ($data == null || !isset($data['snippent'])) {
+            if ($data == null || !isset($data['snippet'])) {
                 $headers[] = $_SERVER['SERVER_PROTOCOL'].' 400 Bad Request';
             } else {
                 // do something / save
