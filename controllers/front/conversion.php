@@ -49,9 +49,22 @@ class EmarketingConversionModuleFrontController extends ModuleFrontController
         ) {
             $id_lang = Configuration::get('PS_LANG_DEFAULT');
         }
-
-
-        if (isset($_SERVER['HTTP_AUTHORIZATION']) && $_SERVER['HTTP_AUTHORIZATION'] != '' && $_SERVER['HTTP_AUTHORIZATION'] == Configuration::get(Emarketing::$conf_prefix.'SHOP_TOKEN')) {
+    
+    
+        $requestToken = "";
+        if (function_exists('apache_request_headers')) {
+            $requestHeaders = apache_request_headers();
+            if (isset($requestHeaders['Authorization'])) {
+                $requestToken = $requestHeaders['Authorization'];
+            }
+        } else {
+            $requestHeaders = $_SERVER;
+            if (isset($requestHeaders['HTTP_AUTHORIZATION'])) {
+                $requestToken = $requestHeaders['HTTP_AUTHORIZATION'];
+            }
+        }
+    
+        if (!empty($requestToken) && $requestToken == Configuration::get(Emarketing::$conf_prefix.'SHOP_TOKEN')) {
             $data = null;
             if ($input_put_data != null) {
                 $data = Tools::jsonDecode($input_put_data, true);
