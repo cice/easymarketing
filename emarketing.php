@@ -2079,7 +2079,7 @@ class Emarketing extends Module
         }
 
         if ($additional_image_links != '') {
-            $prod['additional_image_links'] = $additional_image_links;
+            $prod['additional_image_links'] = array($additional_image_links);
         }
 
         if (Manufacturer::getNameById($product['id_manufacturer']) !== false) {
